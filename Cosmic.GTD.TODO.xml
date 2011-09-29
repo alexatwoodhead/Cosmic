@@ -1,0 +1,458 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="24">
+<Class name="Cosmic.GTD.TODO">
+<Description><![CDATA[
+<pre>
+Copyright (c) 2011 Alex Woodhead
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre>
+A Get Things Done tag for filing activities and followup tasks<br/>
+Use the GTD template to manage activites and see activity burn down<br/>
+This tag can be added to classes, methods, properties and parameters]]></Description>
+<Super>Cosmic.MetaTag.Tag</Super>
+<TimeCreated>62286,64972.172642</TimeCreated>
+
+<Parameter name="DecorateClasses">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="DecorateMethods">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="DecorateSource">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="DecorateProperties">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="DecorateParameters">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="DecorateXDatas">
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="IsMultiUse">
+<Description>
+Override Parameter with value "1" to allow to be used multiple times in the same Description text</Description>
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Property name="What">
+<Description>
+Describe what needs doing / completing / fixing</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Property name="Who">
+<Description>
+The name of the person who is going to implement the work</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="When">
+<Description><![CDATA[
+The Data and Time for when the work need to be completed<br/>
+Expected format is CCYY-MM-DD HH:MM:SS]]></Description>
+<Type>%TimeStamp</Type>
+<SqlFieldName>_WHEN</SqlFieldName>
+</Property>
+
+<Property name="Next">
+<Description>
+Flag to indicate that this item is the next step to progress a task</Description>
+<Type>%Boolean</Type>
+<InitialExpression>0</InitialExpression>
+<SqlFieldName>_NEXT</SqlFieldName>
+</Property>
+
+<Property name="Completed">
+<Type>%Boolean</Type>
+<InitialExpression>0</InitialExpression>
+</Property>
+
+<Index name="iWhen">
+<Type>bitmap</Type>
+<Properties>CosmicClassType:Exact,When</Properties>
+</Index>
+
+<Index name="iWho">
+<Type>bitmap</Type>
+<Properties>CosmicClassType:Exact,Who</Properties>
+</Index>
+
+<Method name="InitS">
+<Description><![CDATA[
+Constructor for "What" needs doing.<br/>
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument")]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>]]></Description>
+<FormalSpec>what:%String</FormalSpec>
+<Implementation><![CDATA[	set ..What=what
+]]></Implementation>
+</Method>
+
+<Method name="InitSB">
+<Description><![CDATA[
+Constructor for "What" needs doing.<br/>
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument",True)]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>]]></Description>
+<FormalSpec>what:%String,completed:%Boolean</FormalSpec>
+<Implementation><![CDATA[
+	set ..What=what
+	set ..Completed=completed
+]]></Implementation>
+</Method>
+
+<Method name="InitSS">
+<Description><![CDATA[
+Constructor for "What" needs doing and "Who" is going to do it.<br/>
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument","John Smith")]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>]]></Description>
+<FormalSpec>what:%String,who:%String</FormalSpec>
+<Implementation><![CDATA[
+	set ..What=what
+	set ..Who=who
+]]></Implementation>
+</Method>
+
+<Method name="InitSSB">
+<Description><![CDATA[
+Constructor for "What" needs doing and "Who" is going to do it.<br/>
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument","John Smith",TRUE)]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>]]></Description>
+<FormalSpec>what:%String,who:%String,completed:%Boolean</FormalSpec>
+<Implementation><![CDATA[
+	set ..What=what
+	set ..Who=who
+	set ..Completed=completed
+]]></Implementation>
+</Method>
+
+<Method name="InitSSS">
+<Description><![CDATA[
+Constructor for "What" needs doing, "Who" is going to do it and "When" is needs to be done by.<br/>
+Note that the expected format for "When" is 
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument","John Smith","2011-07-14 17:00:00")]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>
+[GTD("Add Date Time validation to ""When"" arguement")]]]></Description>
+<FormalSpec>what:%String,who:%String,when:%String</FormalSpec>
+<Implementation><![CDATA[
+	set ..What=what
+	set ..Who=who
+	set ..When=when
+]]></Implementation>
+</Method>
+
+<Method name="InitSSSB">
+<Description><![CDATA[
+Constructor for "What" needs doing, "Who" is going to do it and "When" is needs to be done by.<br/>
+Note that the expected format for "When" is 
+<EXAMPLE LANGUAGE="CLS">
+[Using("Cosmic.GTD")]
+class SomeClass
+{
+  /// [GTD("Add validation for numeric argument","John Smith","2011-07-14 17:00:00",TRUE)]
+  method SomeMethod()
+  {
+   
+  }
+}
+</EXAMPLE>
+[GTD("Add Date Time validation to ""When"" arguement")]]]></Description>
+<FormalSpec>what:%String,who:%String,when:%String,completed:%Boolean</FormalSpec>
+<Implementation><![CDATA[
+	set ..What=what
+	set ..Who=who
+	set ..When=when
+	set ..Completed=completed
+]]></Implementation>
+</Method>
+
+<Method name="ErrorToHtml">
+<Description><![CDATA[
+Method to emit descriptive HTML of tag parse errors.</b>
+For use by the Get Things Done template]]></Description>
+<FormalSpec>status:%Status</FormalSpec>
+</Method>
+
+<Method name="ToHTML">
+<Description><![CDATA[
+Method to emit descriptive HTML of a MetaTag class.</b>
+For use by the Get Things Done template]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>class:%String,includeCompleted:%Boolean=0</FormalSpec>
+<Implementation><![CDATA[
+	Write !,"<i>ClassName</i>: <b>",class,"</b><br/>"
+	
+	set rs=##class(%ResultSet).%New()
+	set rs.ClassName="Cosmic.GTD.TODO"
+	set rs.QueryName="ClassTags"
+	do rs.Execute(class)
+	while (rs.Next())
+	{
+		W !,"&nbsp;&nbsp;Class TODO:<br/>"
+		set who=rs.Get("Who")
+		set what=rs.Get("What")
+		set when=rs.Get("_When")
+		set completed=rs.Get("Completed")
+		W:who'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>Who</u>: ",$ZCVT(who,"O","HTML"),"<br/>"
+		W:what'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>What</u>: ",$ZCVT(what,"O","HTML"),"<br/>"
+		W:when'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>When</u>: ",$ZCVT(when,"O","HTML"),"<br/>"
+		W:completed=1 !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>Completed</u><br/>"
+	}
+	do rs.%Close()
+	
+	set previous=""
+	set rs=##class(%ResultSet).%New()
+	set rs.ClassName="Cosmic.GTD.TODO"
+	set rs.QueryName="MethodTags"
+	do rs.Execute(class)
+	while (rs.Next())
+	{
+		//set tag=..%OpenId(rs.Get("ID"))
+		//continue:'$IsObject(tag)
+		set method=rs.Get("CosmicMethod")
+		set isMethodSource=rs.Get("CosmicIsMethodSource")
+		set who=rs.Get("Who")
+		set what=rs.Get("What")
+		set when=rs.Get("_When")
+		set completed=rs.Get("Completed")
+		if previous'=method {
+			W !,"&nbsp;&nbsp;<i>Method</i> ",method,"<br/>"	
+			s previous=method
+		}
+		W:what'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>What</u>: ",$ZCVT(what,"O","HTML"),"<br/>"
+		W:who'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Who</u>: ",$ZCVT(who,"O","HTML"),"<br/>"
+		W:when'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>When</u>: ",$ZCVT(when,"O","HTML"),"<br/>"
+		W:completed=1 !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Completed</u><br/>"
+		set tag=""
+	}
+	do rs.%Close()
+	
+	set previous=""
+	set rs=##class(%ResultSet).%New()
+	set rs.ClassName="Cosmic.GTD.TODO"
+	set rs.QueryName="PropertyTags"
+	do rs.Execute(class)
+	while (rs.Next())
+	{
+		set property=rs.Get("CosmicProperty"),who=rs.Get("Who"),what=rs.Get("What"),when=rs.Get("_WHEN")
+		if (previous'=property) {
+			W !,"&nbsp;&nbsp;<i>Property</i> ",property,"<br/>"	
+		}
+		W:what'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>What</u>: ",$ZCVT(what,"O","HTML"),"<br/>"
+		W:who'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Who</u>: ",$ZCVT(who,"O","HTML"),"<br/>"
+		W:when'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>When</u>: ",$ZCVT(when,"O","HTML"),"<br/>"
+		W:completed=1 !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Completed</u><br/>"
+	}
+	do rs.%Close()
+	
+	set previous=""
+	set rs=##class(%ResultSet).%New()
+	set rs.ClassName="Cosmic.GTD.TODO"
+	set rs.QueryName="ParameterTags"
+	do rs.Execute(class)
+	while (rs.Next())
+	{
+		set parameter=rs.Get("CosmicParameter"),who=rs.Get("Who"),what=rs.Get("What"),when=rs.Get("_WHEN")
+		if (previous'=parameter) {
+			W !,"&nbsp;&nbsp;<i>Parameter</i> ",property,"<br/>"	
+		}
+		W:what'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>What</u>: ",$ZCVT(what,"O","HTML"),"<br/>"
+		W:who'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Who</u>: ",$ZCVT(who,"O","HTML"),"<br/>"
+		W:when'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>When</u>: ",$ZCVT(when,"O","HTML"),"<br/>"
+		W:completed=1 !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Completed</u><br/>"
+	}
+	do rs.%Close()
+	
+	set previous=""
+	set rs=##class(%ResultSet).%New()
+	set rs.ClassName="Cosmic.GTD.TODO"
+	set rs.QueryName="XDataTags"
+	do rs.Execute(class)
+	while (rs.Next())
+	{
+		set xdata=rs.Get("CosmicParameter"),who=rs.Get("Who"),what=rs.Get("What"),when=rs.Get("_WHEN")
+		if (previous'=xdata) {
+			W !,"&nbsp;&nbsp;<i>Parameter</i> ",property,"<br/>"	
+		}
+		W:what'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;<u>What</u>: ",$ZCVT(what,"O","HTML"),"<br/>"
+		W:who'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Who</u>: ",$ZCVT(who,"O","HTML"),"<br/>"
+		W:when'="" !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>When</u>: ",$ZCVT(when,"O","HTML"),"<br/>"
+		W:completed=1 !,"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<u>Completed</u><br/>"
+	}
+	do rs.%Close()
+	W !,"<hr/>"
+]]></Implementation>
+</Method>
+
+<Query name="ClassTags">
+<Type>%SQLQuery</Type>
+<FormalSpec>class:%String</FormalSpec>
+<SqlQuery>SELECT Who,What,_WHEN,Completed
+ FROM Cosmic_GTD.TODO
+ WHERE (CosmicClassType = 'cd'
+ 	AND CosmicClass=:class
+ 	AND CosmicClassOnly = 1)
+ ORDER BY CosmicClass</SqlQuery>
+</Query>
+
+<Query name="MethodTags">
+<Type>%SQLQuery</Type>
+<FormalSpec>class:%String</FormalSpec>
+<SqlQuery>SELECT CosmicMethod,CosmicIsMethodSource,Who,What,_WHEN,Completed
+ FROM Cosmic_GTD.TODO
+ WHERE (CosmicClassType = 'cd'
+ 	AND CosmicClass=:class
+ 	AND CosmicMethod IS NOT NULL
+ 	AND CosmicClassOnly = 0)
+ ORDER BY CosmicMethod,CosmicIsMethodSource</SqlQuery>
+</Query>
+
+<Query name="PropertyTags">
+<Type>%SQLQuery</Type>
+<FormalSpec>class:%String</FormalSpec>
+<SqlQuery>SELECT CosmicProperty,Who,What,_WHEN,Completed FROM TODO
+	WHERE (CosmicClassType = 'cd'
+		AND CosmicClass=:class
+		AND CosmicProperty IS NOT NULL)
+	ORDER BY CosmicProperty</SqlQuery>
+</Query>
+
+<Query name="ParameterTags">
+<Type>%SQLQuery</Type>
+<FormalSpec>class:%String</FormalSpec>
+<SqlQuery>SELECT CosmicParameter,Who,What,_WHEN,Completed FROM TODO
+	WHERE (CosmicClassType = 'cd'
+		AND CosmicClass=:class
+		AND CosmicParameter IS NOT NULL)
+	ORDER BY CosmicParameter</SqlQuery>
+</Query>
+
+<Query name="XDataTags">
+<Type>%SQLQuery</Type>
+<FormalSpec>class:%String</FormalSpec>
+<SqlQuery>SELECT CosmicXData,Who,What,_WHEN,Completed FROM TODO
+	WHERE (CosmicClassType = 'cd'
+		AND CosmicClass=:class
+		AND CosmicXData IS NOT NULL)
+	ORDER BY CosmicXData</SqlQuery>
+</Query>
+
+<Query name="GetAssignees">
+<Description>
+By default only look for work that is not completed</Description>
+<Type>%SQLQuery</Type>
+<FormalSpec>completed:%Boolean=1</FormalSpec>
+<SqlQuery>	SELECT Distinct Who
+	FROM TODO
+	WHERE (CosmicClassType='cd')
+	AND Completed=1
+	ORDER BY Who</SqlQuery>
+</Query>
+
+<Query name="GetDeadlines">
+<Type>%SQLQuery</Type>
+<FormalSpec>completed:%Boolean=1</FormalSpec>
+<SqlQuery>	SELECT Distinct _When
+	FROM TODO
+	WHERE (CosmicClassType='cd')
+	AND Completed=1
+	ORDER BY _When DESC</SqlQuery>
+</Query>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>TODODefaultData</DefaultData>
+<Data name="TODODefaultData">
+<Structure>listnode</Structure>
+<Subscript>"TODO"</Subscript>
+<Value name="1">
+<Value>What</Value>
+</Value>
+<Value name="2">
+<Value>Who</Value>
+</Value>
+<Value name="3">
+<Value>When</Value>
+</Value>
+<Value name="4">
+<Value>Next</Value>
+</Value>
+<Value name="5">
+<Value>Completed</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

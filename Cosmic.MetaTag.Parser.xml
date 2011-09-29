@@ -1,0 +1,1468 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="24">
+<Class name="Cosmic.MetaTag.Parser">
+<Description><![CDATA[
+<pre>
+Copyright (c) 2011 Alex Woodhead
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre>
+Core MetaTag class. Extracts tag definitions from source code Description fields.
+A temporary cache of this metadata is saved in global CacheTempUserMetaTag.Class
+The stratergy of the ]]></Description>
+<Abstract>1</Abstract>
+<TimeCreated>62280,58980.645201</TimeCreated>
+
+<Method name="UpdateAll">
+<Description>
+classType flag values
+  cc - compiled class
+  cd - class definition
+OUTPUT arguments
+ tagParseErrors
+   Subscript - classname
+   Value=Status</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[classType:Cosmic.MetaTag.ClassType="cc",trace=0,&tagParseErrors]]></FormalSpec>
+<Implementation><![CDATA[
+	set qryClass=$S(classType="cc":"%Dictionary.CompiledClass",1:"%Dictionary.ClassDefinition")
+	// Itterate over Compiled Class dictionary	
+	set rs=##class(%Library.ResultSet).%New()
+  	set rs.ClassName=qryClass
+  	// Initially we only need very specific information ID and TimeChanged
+  	// so use the faster %Persistent Extent query instead of the "Sumamry"
+  	// query on CompiledClass / ClassDefinition
+  	set rs.QueryName="Extent"
+  	do rs.Execute()
+  	while (rs.Next()) {
+		set classname=rs.Get("ID")
+		continue:$E(classname,1)="%"
+		continue:$E(classname,1,4)="csp."
+		continue:$E(classname,1,7)="EnsLib."
+		continue:$E(classname,1,4)="Ens."
+		continue:$E(classname,1,5)="CSPX."
+		continue:$E(classname,1,10)="EnsPortal."
+		continue:$E(classname,1,11)="RS.CacheSql"
+		
+		if classType="cc" {
+			/// [TODO("Need to fix this for CSP pages, ie the classname is not the same at as the original class")]
+			set dictClass=##class(%Dictionary.CompiledClass).%OpenId(classname,0)
+		} else {
+			set dictClass=##class(%Dictionary.ClassDefinition).%OpenId(classname,0)
+		}
+		continue:'$IsObject(dictClass)
+		
+		L +^Cosmic.MetaTag.Parser(classname):2
+		if '$Test continue
+		
+		//set dictClass=##class(%Dictionary.CompiledClass).%OpenId(classname,0)
+		
+		// If the class doesn't support a "Using Tag" then ignore it
+		if (dictClass.Description'["[Using(")
+		{
+			// Delete any existing tags
+			&SQL(DELETE from Cosmic_MetaTag.Tag
+				WHERE CosmicClassType=:classType
+				AND CosmicClass=:classname)		
+		} else {
+			
+			if classname="ClassName:Cosmic.MetaTag.Parser"
+			
+			set lastModified=..GetLastModified(classType,classname)
+			set newModified=dictClass.TimeChanged
+			set isChanged=0
+			if (+newModified>+lastModified)
+			{
+				set isChanged=1
+			} elseif (+newModified=+lastModified),(+$P(newModified,",",2)>+$P(lastModified,",",2))
+			{
+				set isChanged=1
+			}
+			if (isChanged){
+				// class exists so update definitions
+				// First delete old definitions
+				// Delete any existing tags
+				&SQL(DELETE from Cosmic_MetaTag.Tag
+					WHERE CosmicClassType=:classType
+					AND CosmicClass=:classname)
+				
+				// Now create new definitions again
+				set status=$SYSTEM.Status.OK()
+				
+				if (classType="cc")
+				{
+					do ..ReadClass(classname,0,.status)
+				} elseif (classType="cd")
+				{
+					do ..ReadClassDef(classname,0,.status,,.tagParseErrors)
+				}
+				if $Data(status) {
+					set status(classname)=status
+					if trace {
+						Do $SYSTEM.Status.DisplayError(status)
+					}
+				} else {
+					// Set new lastModified
+					Do ..SetLastModified(classType,classname,newModified)	
+				}
+			}
+			
+		}
+		L -^Cosmic.MetaTag.Parser(classname)
+		continue
+  	}
+	// Remove obsolete MetaTag references
+	&SQL(Declare RemoveObsolete CURSOR FOR
+		SELECT distinct CosmicClass
+		INTO :cosmicClass
+		FROM Cosmic_MetaTag.Tag
+		WHERE CosmicClassType=:classType)
+	if classType="cd"
+	{
+		&SQL(OPEN RemoveObsolete)
+		for  {
+			&SQL(FETCH RemoveObsolete)
+			Quit:SQLCODE'=0
+			if '##class(%Dictionary.ClassDefinition).%ExistsId(cosmicClass) {
+				&SQL(Delete from Cosmic_MetaTag.Tag	
+					WHERE CosmicClassType='cd' AND CosmicClass=:cosmicClass)
+			}
+		}
+		&SQL(CLOSE RemoveObsolete)
+	} else {
+		set classType="cc"
+		&SQL(OPEN RemoveObsolete)
+		for  {
+			&SQL(FETCH RemoveObsolete)
+			Quit:SQLCODE'=0
+			if '##class(%Dictionary.CompiledClass).%ExistsId(cosmicClass) {
+				&SQL(Delete from Cosmic_MetaTag.Tag	
+					WHERE CosmicClassType='cc' AND CosmicClass=:cosmicClass)
+			}
+		}
+		&SQL(CLOSE RemoveObsolete)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="SetLastModified">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>classtype:%String="cc",classname:%String=" ",lastmodified:%String</FormalSpec>
+<Implementation><![CDATA[	Set ^Cosmic.MetaTag.TagC("LastModified",classtype,classname)=lastmodified
+]]></Implementation>
+</Method>
+
+<Method name="GetLastModified">
+<ClassMethod>1</ClassMethod>
+<CodeMode>expression</CodeMode>
+<FormalSpec>classtype:%String="cc",classname:%String</FormalSpec>
+<Implementation><![CDATA[$G(^Cosmic.MetaTag.TagC("LastModified",classtype,classname))
+]]></Implementation>
+</Method>
+
+<Method name="DeleteCache">
+<Description>
+d ##class(Cosmic.MetaTag.Tag).DeleteCache()</Description>
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	kill ^Cosmic.MetaTag.TagC
+	kill ^Cosmic.MetaTag.TagS
+	kill ^Cosmic.MetaTag.TagD
+	kill ^Cosmic.MetaTag.TagI
+ 	//&SQL(Delete from Cosmic_MetaTag.Tag)
+]]></Implementation>
+</Method>
+
+<Method name="ReadClassDef">
+<Description>
+Parses a class definition for Tags
+Used during implementation for interactive updates to class definitions eg: Studio Templates</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[classname:%String="",test:%Boolean=0,&status,&expectedTags,&tagstatus]]></FormalSpec>
+<Implementation><![CDATA[
+	
+	#dim dictClass as %Dictionary.ClassDefinition
+	#dim dictMethod as %Dictionary.MethodDefinition
+	#dim dictProperty as %Dictionary.PropertyDefinition
+	#dim dictParameter as %Dictionary.ParameterDefinition
+	
+	set status=$SYSTEM.Status.OK()
+	if classname="" {
+		set status=$SYSTEM.Status.Error(5001,"Required parameter classname not supplied to method ReadClass on Cosmic.MetaTag.Parser")
+		set tagstatus(classname,"%")=status
+		quit $C(0)
+	}
+	
+	if '##class(%Dictionary.ClassDefinition).%ExistsId(classname) {
+		set tSC=$SYSTEM.Status.Error(5001,"Supplied parameter """_classname_""" does not represent a known fully qualified class name.")
+		//set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+		Do ..AppendIfStatus(.status,.tSC)
+		set tagstatus(classname,"%")=status
+		quit $C(0)
+	}
+	
+	set dictClass=##class(%Dictionary.ClassDefinition).%OpenId(classname,0)
+	if '$IsObject(dictClass)
+	{
+		set tSC=$SYSTEM.Status.Error(5001,"Unable  to open Dictionary Compile Class defintion with name "_classname)
+		//set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+		Do ..AppendIfStatus(.status,.tSC)
+		set tagstatus(classname,"%")=status
+		quit $C(0)
+	}
+	
+	// Parse Tags defined on the Class Description
+	Kill rdtagstatus
+	do ..ReadDescription(dictClass.Description,test,.status,"cd","class","",dictClass.Name,.metascope,dictClass.Abstract,0,.rdtagstatus)
+	merge:$Data(rdtagstatus) tagstatus(classname,"%")=rdtagstatus
+	// Loop over each method and inspect for tags
+	set key=""
+	for {	
+		set dictMethod=dictClass.Methods.GetNext(.key)
+		quit:key=""
+		// Ignore system methods
+		continue:$E(dictMethod.Name,1)="%"
+		Kill rdtagstatus
+		do ..ReadDescription(dictMethod.Description,test,.status,"cd","method",dictMethod.Name,dictClass.Name,.metascope,dictClass.Abstract,dictMethod.ClassMethod,.rdtagstatus)
+		merge:$Data(rdtagstatus) tagstatus(classname,"Method "_dictMethod.Name)=rdtagstatus
+		
+		set sourceCode=dictMethod.Implementation.Read(,.tSC)
+		
+		if $SYSTEM.Status.IsError(tSC) {
+			//set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+			do ..AppendIfStatus(.status,.tSC)
+		} else {
+			Kill rdtagstatus
+			do ..ReadDescription(sourceCode,test,.status,"cd","source",dictMethod.Name,dictClass.Name,.metascope,dictClass.Abstract,0,.rdtagstatus)
+			merge:$Data(rdtagstatus) tagstatus(classname,"Method Source"_dictMethod.Name)=rdtagstatus
+		}
+	}
+	// Loop over each property and inspect for tags
+	set key=""
+	for {
+		set dictProperty=dictClass.Properties.GetNext(.key)
+		quit:key=""
+		Kill rdtagstatus
+		do ..ReadDescription(dictProperty.Description,test,.status,"cd","property",dictProperty.Name,dictClass.Name,.metascope,dictClass.Abstract,0,.rdtagstatus)
+		merge:$Data(rdtagstatus) tagstatus(classname,"Property "_dictProperty.Name)=rdtagstatus
+	}
+	// Loop over each parameter and inspect for tags
+	set key=""
+	for {
+		set dictParameter=dictClass.Parameters.GetNext(.key)
+		quit:key=""
+		Kill rdtagstatus
+		do ..ReadDescription(dictParameter.Description,test,.status,"cd","parameter",dictParameter.Name,dictClass.Name,.metascope,dictClass.Abstract,0,.rdtagstatus)
+		merge:$Data(rdtagstatus) tagstatus(classname,"Parameter "_dictParameter.Name)=rdtagstatus
+	}
+	
+	set key=""
+	for {
+		set dictXData=dictClass.XDatas.GetNext(.key)
+		quit:key=""
+		Kill rdtagstatus
+		do ..ReadDescription(dictXData.Description,test,.status,"cd","xdata",dictXData.Name,dictClass.Name,.metascope,dictClass.Abstract,0,.rdtagstatus)
+		merge:$Data(rdtagstatus) tagstatus(classname,"Parameter "_dictXData.Name)=rdtagstatus
+	}
+	
+
+	Quit
+]]></Implementation>
+</Method>
+
+<Method name="ReadClass">
+<Description>
+Parses a Comipled classes for Tags
+Used at run time for TODO tags, CosUnit etc.,.</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[classname:%String="",test:%Boolean=0,&status,&expectedTags]]></FormalSpec>
+<Implementation><![CDATA[
+	#dim dictClass as %Dictionary.CompiledClass
+	#dim dictMethod as %Dictionary.CompiledMethod
+	#dim dictProperty as %Dictionary.CompiledProperty
+	#dim dictParameter as %Dictionary.CompliedParameter
+	
+	// set status=$SYSTEM.Status.OK()
+	if classname="" {
+		set status=$SYSTEM.Status.Error(5001,"Required parameter classname not supplied to method ReadClass on Cosmic.MetaTag.Parser")
+		quit $C(0)
+	}
+	
+	if '##class(%Dictionary.CompiledClass).%ExistsId(classname) {
+		set tSC=$SYSTEM.Status.Error(5001,"Supplied parameter """_classname_""" does not represent a known fully qualified class name.")
+		//set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+		do ..AppendIfStatus(.status,.tSC)
+		quit $C(0)
+	}
+	
+	set dictClass=##class(%Dictionary.CompiledClass).%OpenId(classname,0)
+	if '$IsObject(dictClass)
+	{
+		set tSC=$SYSTEM.Status.Error(5001,"Unable  to open Dictionary Compile Class defintion with name "_classname)
+		//set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+		do ..AppendIfStatus(.status,.tSC)
+		quit $C(0)
+	}
+
+	do ..ReadDescription(dictClass.Description,test,.status,"cc","class","",dictClass.Name,.metascope,dictClass.Abstract,0)
+	// Loop over each method and inspect for tags
+	set key=""
+	for {	
+		set dictMethod=dictClass.Methods.GetNext(.key)
+		quit:key=""
+		// Ignore system methods
+		continue:$E(dictMethod.Name,1)="%"
+		
+		do ..ReadDescription(dictMethod.Description,test,.status,"cc","method",dictMethod.Name,dictClass.Name,.metascope,dictClass.Abstract,dictMethod.ClassMethod)
+		
+		// Do you normally ignore source code in compiled class???
+		set sourceCode=dictMethod.Implementation.Read(,.tSC)
+		if $SYSTEM.Status.IsError(tSC) {
+			set status=$Select($SYSTEM.Status.IsError(tSC):$SYSTEM.Status.AppendStatus(status,tSC),1:tSC)
+		} else {
+			do ..ReadDescription(sourceCode,test,.status,"cc","source",dictMethod.Name,dictClass.Name,.metascope,dictClass.Abstract,dictMethod.ClassMethod)
+		}
+	}
+	// Loop over each property and inspect for tags
+	set key=""
+	for {
+		set dictProperty=dictClass.Properties.GetNext(.key)
+		quit:key=""
+		do ..ReadDescription(dictProperty.Description,test,.status,"cc","property",dictProperty.Name,dictClass.Name,.metascope,dictClass.Abstract,0)
+	}
+	// Loop over each parameter and inspect for tags
+	set key=""
+	for {
+		set dictParameter=dictClass.Parameters.GetNext(.key)
+		quit:key=""
+		do ..ReadDescription(dictParameter.Description,test,.status,"cc","parameter",dictParameter.Name,dictClass.Name,.metascope,dictClass.Abstract,0)
+	}
+	
+	set key=""
+	for {
+		set dictXData=dictClass.XDatas.GetNext(.key)
+		quit:key=""
+		do ..ReadDescription(dictXData.Description,test,.status,"cc","xdata",dictXData.Name,dictClass.Name,.metascope,dictClass.Abstract,0)
+	}
+
+	Quit
+]]></Implementation>
+</Method>
+
+<Method name="ReadDescription">
+<Description><![CDATA[
+The read method parses the description string
+from a Class, Method or Property Definition.
+When the test flag is false (the default) then one or more
+Tag objects may be returned.
+When the test flag is true then only errors are reported via the status reference.<br/>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[description:%String="",test:%Boolean=0,&status:%Status,classType:%String="cc",dictType:%String,dictName:%String,dictClass:%String,&metascope,isClassAbstract=0,isClassMethod=0,&tagstatus]]></FormalSpec>
+<Implementation><![CDATA[
+	/// split the description text into distinct lines and parse individually
+	set metascope("Cosmic.MetaTag")=""  // Allows Cosmic tags like "Using" to be employed in class descriptions
+	
+	set newline=$Select($Length(description,$C(13,10))>1:$C(13,10),1:$C(10))
+	set len=$length(description,newline)
+	set count=1
+	set inExample=0
+	for lineNumber=1:1:len {
+		kill rstatus  // clear previous error flag
+		#dim obj as %RegisteredObject
+		// ReadLine(source As %String, test As %Boolean, ByRef status As %Status, dictType As %String, dictName As %String, dictClass As %String, item As %Integer, ByRef tagCount, ByRef metascope) As Cosmic.MetaTag.Tag
+		set source=$Piece(description,newline,lineNumber)
+		
+		// Ignore example markup blocks. DO NOT PROCESS these sections for metatags.
+		if inExample=0 
+		{
+			set inExample=..IsStartExample(source)
+			// Ignore this line if it started an example section
+			if inExample=1 continue
+		} else {
+			set inExample=..IsEndExample(source)
+			// Ignore this line if it ended an example section
+			if inExample=0 continue	
+		}
+		kill rstatus
+	  	do ..ReadLine(source,test,.rstatus,classType,dictType,dictName,dictClass,count,.tagCount,.metascope,lineNumber,isClassAbstract, isClassMethod)
+	  	
+	  	if $Data(rstatus)
+	  	{
+		  	set tagstatus(lineNumber,"e")=rstatus
+		  	set tagstatus(lineNumber,"l")=source
+		  	if $Data(status),$SYSTEM.Status.IsError(status)
+		  	{
+		  		do $SYSTEM.Status.AppendStatus(status,rstatus)
+		  	} else {
+			  	set status=rstatus
+		  	}
+		  	// if a tag has been identified but has error, still increment its count number
+		  	set count=count+1
+	  	}
+	}
+	// Nothing is returned by this method
+	quit
+]]></Implementation>
+</Method>
+
+<Method name="IsStartExample">
+<Description><![CDATA[
+Method to detect whether a comment line starts with
+an example Documentation markup tag
+<EXAMPLE>
+/// <EXAMPLE>
+</EXAMPLE>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>source:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	set pos=0
+	set len=$Length(source)
+	set ret=0
+	// Ignore leading white space
+	for {
+		quit:pos=len
+		set pos=pos+1
+		set char=$E(source,pos)
+		// ignore leading white space
+		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char continue
+		//if stage=0,char="/",$E(source,pos,pos+2)="///" set stage=1,pos=pos+2 continue
+		//if stage=1,char="[" set stage=2 continue
+		if char="<",$ZCVT($E(source,pos+1,pos+7),"U")="EXAMPLE" set ret=1 quit		
+	}
+	quit ret
+]]></Implementation>
+</Method>
+
+<Method name="IsEndExample">
+<Description><![CDATA[
+Method to detect whether a comment line ends with
+an example Documentation markup tag
+<EXAMPLE>
+/// </EXAMPLE>
+</EXAMPLE>]]></Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>source:%String</FormalSpec>
+<ReturnType>%Boolean</ReturnType>
+<Implementation><![CDATA[
+	set pos=0
+	set len=$Length(source)
+	set ret=0
+	// Ignore leading white space
+	for {
+		quit:pos=len
+		set pos=pos+1
+		set char=$E(source,pos)
+		// ignore leading white space
+		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char continue
+		//if stage=0,char="/",$E(source,pos,pos+2)="///" set stage=1,pos=pos+2 continue
+		//if stage=1,char="[" set stage=2 continue
+		if char="<",$ZCVT($E(source,pos+1,pos+8),"U")="/EXAMPLE" set ret=1 quit		
+	}
+	quit ret
+]]></Implementation>
+</Method>
+
+<Method name="ReadLine">
+<Description>
+Parse a single source description line for a meta tag
+Persists the tag instead of returning it</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[source:%String,test:%Boolean,&status:%Status,classType:%String="cc",dictType:%String,dictName:%String,dictClass:%String,item:%Integer,&tagCount,&metascope,lineNumber:%Integer=0,isClassAbstract:%Boolean=0,isClassMethod:%Boolean=0]]></FormalSpec>
+<Implementation><![CDATA[
+	quit:source'["[" $C(0)
+	set err=0
+	set exit=0
+	set stage=0
+	set pos=0
+	set len=$Length(source)
+	set Tagname=""
+	set ret=""
+	// Ignore leading white space
+	for {
+		quit:pos=len
+		set pos=pos+1
+		set char=$E(source,pos)
+		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char continue
+		// when parsing implemention source code for tags
+		// tag syntax will present "///" prefix
+		if dictType="source" {
+			if stage=0 {
+				if char="/",$E(source,pos,pos+2)="///" {
+					set stage=1,pos=pos+2 continue
+				} else {
+					// Some other non whitespace content is prefixing the potential source tag so quit
+					quit	
+				}
+			} elseif stage=1,char="[" {
+				set stage=2 continue
+				
+			}
+		} else {
+			// when 
+			if stage=0,char="[" set stage=2 continue
+		}
+		if stage=2,char?1A set stage=3,tokenstart=pos continue
+		if stage=3,char'?1(1A,1N,1".") {
+			if char'="(" set exit=1 quit // always expect parenthesis
+			set stage=4
+			// Definately inside a tag line now so set status errors before exit
+			set Tagname=$E(source,tokenstart,pos-1)
+		} else {
+			continue  // inside token name	
+		}
+		set exit=1 quit
+	}
+	
+	if dictType="class"
+	{
+		set errorMessageEnd=" Tag item "_item_" of class "_dictClass
+	} else {
+		set errorMessageEnd=" Tag item "_item_" of "_dictType_" "_dictName_" of class "_dictClass
+	}
+	
+	// Check that the Tag name provided is in the format of a classname
+	// or in a fully qualified classname (ie: including package)
+	// TODO - set status error?
+	if Tagname'?1A.AN.(1"."1A.AN) {
+		//set status=$SYSTEM.Status.Error(5001,"Invalid tag name format ("_Tagname_") used in MetaTag definition"_errorMessageEnd)
+		quit $C(0)	
+	}
+	
+	set found=0
+	// If the Tag name is a fully qualified pattern
+	// check to see that it exists in the %Dictionary
+	if Tagname?1A.AN1.(1"."1A.AN)
+	{
+		if ##class(%Dictionary.CompiledClass).%ExistsId(Tagname)
+		{
+			set found=1
+		}
+	} else {
+	
+		// Check whether the token name is equal to a fully qualified class name
+		// or can be resolved to a class name via the tagscope collection
+		set package=""
+		for {
+			set package=$Order(metascope(package))
+			Quit:package=""  // exit for loop
+			set alias=metascope(package)
+			quit:alias'=""  // exit for loop - try processing alias mappings next
+			set qualified=package_"."_Tagname
+			if classType="cc",##class(%Dictionary.CompiledClass).%ExistsId(qualified)
+			{
+				set found=1
+				set Tagname=qualified
+				quit
+			} elseif classType="cd",##class(%Dictionary.ClassDefinition).%ExistsId(qualified)
+			{
+				set found=1
+				set Tagname=qualified
+				quit
+			}
+			continue
+		}
+	}
+	// Not found yet so lets try alias mappings
+	if found=0 {
+		set alias=$P(Tagname,".",1,$L(Tagname,".")-1)
+		set aTagname=$P(Tagname,".",$L(Tagname,"."))
+		if alias'=""
+		{
+		  	// loop through metascope packages looking for alias name
+		  	set package=""
+			for {
+				set package=$Order(metascope(package))
+				set talias=metascope(package)
+				quit:talias'=alias  // these aren't the aliases you are looking for. Move along.. move along.
+				quit:package=""
+				set qualified=package_"."_aTagname
+				if classType="cc",##class(%Dictionary.CompiledClass).%ExistsId(qualified)
+				{
+					set found=1
+					set Tagname=qualified
+					quit
+				} elseif classType="cd",##class(%Dictionary.ClassDefinition).%ExistsId(qualified)
+				{
+					set found=1
+					set Tagname=qualified
+					quit
+				}
+				continue
+			}
+		}
+	}
+	
+	if found=0 {
+		// TODO raise error because the TagClass has not been found
+		set status=$SYSTEM.Status.Error(5001,"Unable to correlate tag name format ("_Tagname_") to a compiled class, used in MetaTag definition"_errorMessageEnd)
+		Quit // exit method
+	}
+	set found=0
+	
+	
+	
+	// Check to see whether Tagname is really a subclass of MetaTag
+	s rs=##class(%ResultSet).%New()
+	s rs.ClassName="%Dictionary.ClassDefinition"
+	s rs.QueryName="SubclassOf"
+	s sc=rs.Execute("Cosmic.MetaTag.Tag")
+	while (rs.Next())
+	{
+		if rs.Get("Name")=Tagname
+		{
+			set found=1
+			quit	
+		}
+		continue
+	}
+	if found=0
+	{
+		// TODO - error / status TagName class does not extnd MetaTag
+		set status=$SYSTEM.Status.Error(5001,"The tag resolved to """_Tagname_""" is not a known MetaTag. Used in MetaTag definition"_errorMessageEnd)
+		quit  // exit method
+	}
+	
+	
+	// create an instanse of the new Tag
+	#dim ret as Cosmic.MetaTag.Tag
+	set ret=$CLASSMETHOD(Tagname,"%New")
+	
+	// always assigned class info
+	set ret.CosmicClass=dictClass
+	set ret.CosmicClassType=classType
+	set ret.CosmicIsAbstract=isClassAbstract
+	set ret.CosmicIsClassMethod=isClassMethod
+	set ret.CosmicLineNumber=lineNumber
+	
+	// Within the scope of a single description text, count the number of times a particular tag type is used
+	set x=$Increment(tagCount(Tagname))
+	
+	if dictType="class"
+	{
+		if 'ret.IsDecorateClass()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in a class description context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicClassOnly=1	
+		}
+	} elseif dictType="method"
+	{
+		if 'ret.IsDecorateMethod()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in a method description context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicMethod=dictName
+		}
+	} elseif dictType="source"
+	{	
+		if 'ret.IsDecorateSource()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in a method implementation context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicMethod=dictName
+			set ret.CosmicIsMethodSource=1
+		}
+	} elseif dictType="property"
+	{
+		if 'ret.IsDecorateProperties()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in a property description context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicProperty=dictName
+		}
+	} elseif dictType="parameter"
+	{
+		if 'ret.IsDecorateParameters()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in a parameter description context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicParameter=dictName	
+		}
+	} elseif dictType="xdata"
+	{
+		if 'ret.IsDecorateXDatas()
+		{
+			set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed in an xdata description context. Used in MetaTag definition"_errorMessageEnd)
+			quit $C(0)
+		} else {
+			set ret.CosmicXData=dictName
+		}
+	}
+	// Counts the number of times a particular tag type is used in a single description text block
+	if tagCount(Tagname)>1,'ret.IsMultiUse()
+	{
+		set status=$SYSTEM.Status.Error(5001,"The tag type """_Tagname_""" is not allowed multiple times in a single description context. Used in MetaTag definition"_errorMessageEnd)
+		quit // exit method
+	}
+	
+	kill arguments
+	set error=0
+	set arguments(0)=0 // unknown argument type
+	// Process arguments
+	if $E(source,pos+1)'=")" {
+		for {
+			quit:pos=len
+			quit:error
+			quit:stage=20
+			set pos=pos+1
+			set char=$E(source,pos)
+			
+			if stage=4 {
+				if char=")" {
+					set stage=20 continue
+				} elseif $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char {
+					// ignore leading white space
+		   			continue
+				} elseif char="""" {
+					// Property names will start with Alpha
+	   				// String constructor argument will start with quote (") character
+					set stage="5S",tokenstart=pos continue
+				} elseif char?1(1"-",1"+",1N) {
+					// Numeric constructor argument may start with "+","-", or number
+					set stage="5N",tokenstart=pos continue
+				} elseif $Case($ZCVT($Extract(source,pos,pos+3),"U"),"TRUE":1,:0),$E(source,pos+4)'?1AN {
+					// Boolean constructor argument may start with "T","t","F","f"
+		   			if arguments(0)=0 set arguments(0)=1
+				   	if arguments(0)=2 {
+						set error=1
+						set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+						quit
+			   		}
+			   		set arguments($Increment(arguments))=$ZCVT($Extract(source,pos,pos+3),"U")
+			   		set stage=16
+			   		set pos=pos+4
+			   		set char=$E(source,pos)
+			   		// Continue to allow normal processing
+	   			} elseif $Case($ZCVT($Extract(source,pos,pos+4),"U"),"FALSE":1,:0),$E(source,pos+5)'?1AN {
+		   			if arguments(0)=0 set arguments(0)=1
+			   		if arguments(0)=2 {
+						set error=1
+						set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+						quit
+			   		}
+			   		set arguments($Increment(arguments))=$ZCVT($Extract(source,pos,pos+4),"U")
+			   		set stage=16
+			   		set pos=pos+5
+			   		set char=$E(source,pos)
+			   		// Continue to allow normal processing
+	   			} elseif char?1A {
+		   			set stage=6
+		   			set tokenstart=pos continue
+	   			}
+			} 
+			if stage="5S",char="""" {
+	   			if $E(source,pos+1)'="""" {
+		   			if arguments(0)=0 set arguments(0)=1
+			   		if arguments(0)=2 {
+						set error=1
+						set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+						quit
+			   		}
+		   			set arguments($Increment(arguments))=$Extract(source,tokenstart,pos)
+			   		set stage=16
+			   		set pos=pos+1
+			   		set char=$E(source,pos)
+			   		// Continue to allow normal processing
+	   			} else {
+		   			// skip ahead one character to allow for double quotes
+		   			set pos=pos+1	
+	   			}
+	   		} elseif stage="5N",char'?1(1N,1".") {
+		   		if arguments(0)=0 set arguments(0)=1
+			   	if arguments(0)=2 {
+					set error=1
+					set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+					quit
+			   	}
+		   		set arguments($Increment(arguments))=$Extract(source,tokenstart,pos-1)
+			   	set stage=16
+			   	//set pos=pos+1
+			   	//set char=$E(source,pos)
+			   	// continue next processing
+	   		}
+	   		
+	   		if stage=6,char'?1AN {
+		   		set PropertyName=$Extract(source,tokenstart,pos-1)
+		   		set stage=7
+		   		// continue next processing
+	   		}
+	   		if stage=7 {
+		   		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char {
+			   		continue
+		   		} elseif char="=" {
+			   		set stage=8
+			   		continue
+		   		}
+	   		}
+	   		if stage=8 {
+		   		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char {
+			   		continue
+		   		} elseif char="""" {
+		   			// String constructor argument will start with quote (") character
+	   				set stage="9S",tokenstart=pos continue
+		   		} elseif char?1(1"-",1"+",1N) {
+			   		// Numeric constructor argument may start with "+","-", or number
+			   		set stage="9N",tokenstart=pos continue
+		   		} elseif $Case($ZCVT($Extract(source,pos,pos+3),"U"),"TRUE":1,:0),$E(source,pos+4)'?1AN {
+			   		if arguments(0)=0 {
+				   		set arguments(0)=2
+			   		} elseif arguments(0)=1 {
+						set error=1
+						set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+						quit
+			   		}
+			   		set arguments(PropertyName)="TRUE"
+			   		set stage=16
+			   		set pos=pos+4
+			   		set char=$E(source,pos)
+			   		// Continue to allow normal processing
+			   	} elseif $Case($ZCVT($Extract(source,pos,pos+4),"U"),"FALSE":1,:0),$E(source,pos+5)'?1AN {
+				 	if arguments(0)=0 {
+						set arguments(0)=2
+				 	} elseif arguments(0)=1 {
+						set error=1
+						set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguments with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+						quit
+				 	}
+					set arguments(PropertyName)="FALSE"
+			   		set stage=16
+			   		set pos=pos+5
+			   		set char=$E(source,pos)
+			   		// Continue to allow normal processing
+			   	}
+	   		}
+
+
+	   		
+	   		if stage="9S",char="""",$E(source,pos+1)'="""" {
+		   		if arguments(0)=0 {
+			   		set arguments(0)=2
+		   		} elseif arguments(0)=1 {
+					set error=1
+					set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+					quit
+			   	}
+		   		set arguments(PropertyName)=$Extract(source,tokenstart,pos)
+			   	set stage=16
+			   	set pos=pos+1
+			   	set char=$E(source,pos)
+			   	// Continue to allow normal processing
+	   		}
+	   		
+	   		if stage="9N",char'?1(1N,1".") {
+		   		if arguments(0)=0 {
+			   		set arguments(0)=2
+		   		} elseif arguments(0)=1 {
+					set error=1
+					set status=$SYSTEM.Status.Error(5001,"Cannot mix name value tags arguemtns with constructor style arguements in MetaTag """_Tagname_". Declared in MetaTag definition"_errorMessageEnd)
+					quit
+			   	}
+		   		set arguments(PropertyName)=$Extract(source,tokenstart,pos-1)
+			   	set stage=16
+			   	//set pos=pos+1
+			   	//set char=$E(source,pos)
+			   	// continue next processing
+	   		}
+	   		
+	   		// ignore leading white space
+	   		if stage=16 {
+		   		if $C(9,10,11,12,13,32,133,160,5760,6158,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288)[char {
+			   		continue
+		   		} elseif char="," {
+			   		set stage=4
+		   		} elseif stage=16,char=")" {
+			   		set stage=20
+		   		}
+	   		}	   		
+		}
+	   // Expected comma seperated set of arguments
+	   // They may be named in the format PropertyName=value
+	   // OR 
+	   // They may be constructor style tags where order of arguements is important
+	   // hint - initSB, initSS, initSN
+	} else {
+		
+		//next character is ")" - outside parenthesis - no arguments supplied to this tag
+	  	set stage=20
+	}
+	
+	// Not encounterd ")" character
+	if stage'=20
+	{
+		// TODO malformed error
+		//set status=$SYSTEM.Status.Error(5001,"Malformed tag """_Tagname_""". Used in MetaTag definition"_errorMessageEnd)
+		if $Data(status),$SYSTEM.Status.IsError(status){
+			set status=$SYSTEM.Status.AppendStatus(status,$SYSTEM.Status.Error(5001,"Malformed tag """_Tagname_""". Used in MetaTag definition"_errorMessageEnd))
+		} else {
+			set status=$SYSTEM.Status.Error(5001,"Malformed tag """_Tagname_""". Used in MetaTag definition"_errorMessageEnd)
+		}
+		Quit // exit method
+	}
+	// Place variables in scope for overwriting by indierction further on
+	//set (arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10)=""
+	set arg=0
+	//kill arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10
+	if +$Get(arguments(0))=0
+	{
+	  // there are no arguments to initialise	
+	} elseif ((+$Get(arguments(0)))=1)
+	{
+		// use the constructor form of initialisation
+		set methodSuffix=""
+		for i=1:1:arguments {
+			set value=$Get(arguments(i))
+			if $E(value,1)="""" {
+				set methodSuffix=methodSuffix_"S"
+				set value=$E(value,2,*-1)
+				// replace a two quote sequence with a single quote sequence
+				for  quit:value'[""""""  set value=$P(value,"""""")_""""_$P(value,"""""",2,99)
+			}
+			elseif (value="TRUE") {
+				set methodSuffix=methodSuffix_"B"
+				set value=1
+			}
+			elseif (value="FALSE") {
+				set methodSuffix=methodSuffix_"B"
+				set value=0
+			} else {
+				set methodSuffix=methodSuffix_"N"
+				set value=+value	
+			}
+			if (i=1)
+			{
+				set arg1=value
+			} elseif (i=2)
+			{
+				set arg2=value
+			} elseif (i=3)
+			{
+				set arg3=value
+			} elseif (i=4)
+			{
+				set arg4=value
+			} elseif (i=5)
+			{
+				set arg5=value
+			} elseif (i=6)
+			{
+				set arg6=value
+			} elseif (i=7)
+			{
+				set arg7=value
+			} elseif (i=8)
+			{
+				set arg8=value
+			} elseif (i=9)
+			{
+				set arg9=value				
+			} elseif (i=10)
+			{
+				set arg10=value
+			}			
+			//set @("arg("_i_")"_i)=value
+			
+		}
+		if $Data(arg10)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,arg10)
+			}
+		} elseif $Data(arg9)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9)
+			}
+		} elseif $Data(arg8)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8)
+			}
+		} elseif $Data(arg7)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5,arg6,arg7)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5,arg6,arg7)
+			}
+		} elseif $Data(arg6)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5,arg6)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5,arg6)
+			}
+		} elseif $Data(arg5)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4,arg5)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4,arg5)
+			}
+		} elseif $Data(arg4)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3,arg4)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3,arg4)
+			}
+		} elseif $Data(arg3)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2,arg3)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2,arg3)
+			}
+		} elseif $Data(arg2)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1,arg2)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1,arg2)
+			}
+		} elseif $Data(arg1)
+		{
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll",arg1)
+			} else {
+				do $METHOD(ret,"Init"_methodSuffix,arg1)
+			}
+		} else {
+			if ret.IsInitAll()
+			{
+				do $METHOD(ret,"InitAll")
+			} else {
+				// Just call "init" without arguments
+				do $METHOD(ret,"Init"_methodSuffix)
+			}
+		}
+	} elseif +$Get(arguments(0))=2
+	{
+		// this form will set properties
+		set PropertyName=""
+		for  {
+			set PropertyName=$Order(arguments(PropertyName))
+			continue:PropertyName=0
+			quit:PropertyName=""
+			set value=$Get(arguments(PropertyName))
+			if $E(value,1)="""" {
+				//set methodSuffix=methodSuffix_"S"
+				set value=$E(value,2,*-1)
+				// replace a two quote sequence with a single quote sequence
+				// TODO: issue with stripping double quotes here!!
+				for  quit:value'[""""""  set value=$P(value,"""""")_""""_$P(value,"""""",2,99)
+			}
+			elseif (value="TRUE") {
+				//set methodSuffix=methodSuffix_"B"
+				set value=1
+			}
+			elseif (value="FALSE") {
+				//set methodSuffix=methodSuffix_"B"
+				set value=0
+			} else {
+				//set methodSuffix=methodSuffix_"N"
+				set value=+value	
+			}
+			//W !,"$PROPERTY("_ret.%ClassName(1)_","_PropertyName_")="_value
+			try {
+				set $PROPERTY(ret,PropertyName)=value
+			} catch errobj {
+				if $Data(status),$SYSTEM.Status.IsError(status){
+					set status=$SYSTEM.Status.AppendStatus(status,$SYSTEM.Status.Error(5001,errobj.Name_" "_errobj.Data))
+				} else {
+					set status=$SYSTEM.Status.Error(5001,errobj.Name_" "_errobj.Data)
+				}
+			}
+		}
+	}
+	
+	// If the code is processing a class description
+	// and a "Using" Tag has been identified
+	// Add addtional "using" packages and aliases as necessary
+	// for the processing of subsequent Tags for all description types (ie: class, method, property, parameter)
+	if dictType="class",ret.%ClassName(1)="Cosmic.MetaTag.Using",ret.Name'=""
+	{
+		set metascope(ret.Name)=ret.Alias
+	}
+	
+	//next character maybe be ")" - outside parenthesis
+	// next whitespace
+	// next character "]"
+	
+	// not really interested in the rest of the content on a source line
+	
+	//Quit 1  // Tag was found
+	set sc=ret.%Save()
+	if $SYSTEM.Status.IsError(sc) {
+		set status=$SYSTEM.Status.Error(5001,"Error saving tag """_Tagname_""". Used in MetaTag definition"_errorMessageEnd)
+		set status=$SYSTEM.Status.AppendStatus(status,sc)
+		//D $SYSTEM.Status.DisplayError(status)
+	}
+	
+	quit // exit method
+]]></Implementation>
+</Method>
+
+<Method name="TestReadLine">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	set source="  ///  [  Test.Tag1()] faifgkusfgiks"
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",2,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  do $SYSTEM.OBJ.Dump(tag)	
+	}
+]]></Implementation>
+</Method>
+
+<Method name="TestReadLine2">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	set test=1
+	set metascope("Cosmic.GTD")=""
+	#dim tag as Test.Tag2
+	set source=" ///  [TODO(""string1"")] "
+	do ..ReadLine(source,1,.status,"cc","method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  //if tag.PropS1'="string1" ZTRAP
+	}
+	set test=test+1
+	quit
+	
+	set source="  ///  [  Test.Tag2(""string1"",""string2"")] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropS1'="string1" ZTRAP
+	  if tag.PropS2'="string2" ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(TRUE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	}
+	
+	set test=test+1
+	set source="  ///  [  Test.Tag2(FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(TRUE,TRUE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=1 ZTRAP
+	}
+	set test=test+1
+	set source="  ///  [  Test.Tag2(FALSE,FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=0 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	set source="  ///  [  Test.Tag2(TRUE,FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	set source="  ///  [  Test.Tag2( FALSE, TRUE )] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=0 ZTRAP
+	  if tag.PropB2'=1 ZTRAP
+	}
+	set test=test+1
+		
+	set source="  ///  [  Test.Tag2(12.34)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=12.34 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(+12.34)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=12.34 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(-12.34)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=-12.34 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(+12.34, -10.9898)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=+12.34 ZTRAP
+	  if tag.PropN2'=-10.9898 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(""+12.34"", -10.9898)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropS1'="+12.34" ZTRAP
+	  if tag.PropN1'=-10.9898 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(-10.9898, TRUE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=-10.9898 ZTRAP
+	  if tag.PropB1'=1 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  ///  [  Test.Tag2(-10.9898, FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropN1'=-10.9898 ZTRAP
+	  if tag.PropB1'=0 ZTRAP
+	}
+	set test=test+1
+]]></Implementation>
+</Method>
+
+<Method name="TestReadLine3">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	set test=1
+	
+	set source="  /// [Test.Tag2(PropS1=""String1"")] "
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropS1'="String1" ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag2(PropS1=""String1"", PropS2=""String2"")] "
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropS1'="String1" ZTRAP
+	  if tag.PropS2'="String2" ZTRAP
+	}
+	set test=test+1	
+	
+	set source="  /// [Test.Tag2(PropB1=TRUE)] "
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  ;if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag2(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag2(PropS1=""String1"",PropS2=""String2"",PropB1=TRUE, PropB2=FALSE,PropN1=12.33,PropN2=-45.234)] "
+	set tag=..ReadLine(source,1,.status,"Method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropS1'="String1" ZTRAP
+	  if tag.PropS2'="String2" ZTRAP
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	  if tag.PropN1'=12.33 ZTRAP
+	  if tag.PropN2'=-45.234
+	}
+	set test=test+1
+]]></Implementation>
+</Method>
+
+<Method name="TestReadLine4">
+<Description>
+Test whether a Tag may be used in a given description context</Description>
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	set test=1
+	
+	set source="  /// [Test.Tag1(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"class","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag1(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag1(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"property","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set source="  /// [Test.Tag1(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"parameter","OnStart","SomePackage.SomeClass",test,1,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+	
+	set tagCount("Test.Tag2")=2
+	
+	set source="  /// [Test.Tag2(PropB1=TRUE, PropB2=FALSE)] "
+	set tag=..ReadLine(source,1,.status,"method","OnStart","SomePackage.SomeClass",test,.tagCount,.metascope)
+	if $Data(status){
+		do $SYSTEM.Status.DisplayError(status)
+	} else {
+	  //do $SYSTEM.OBJ.Dump(tag)
+	  if tag.PropB1'=1 ZTRAP
+	  if tag.PropB2'=0 ZTRAP
+	}
+	set test=test+1
+]]></Implementation>
+</Method>
+
+<Method name="AppendIfStatus">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>status:%Status,newstatus:%Status</FormalSpec>
+<Implementation><![CDATA[
+	if '$Data(status) {
+		if '$Data(newstatus) {
+			quit
+		} else {
+			set status=newstatus	
+		}
+	} else {
+		if '$Data(newstatus) {
+			quit
+		} else {
+			set status=$SYSTEM.Status.AppendStatus(status,newstatus)
+		}	
+	}
+]]></Implementation>
+</Method>
+</Class>
+</Export>

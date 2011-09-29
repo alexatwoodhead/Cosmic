@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="24" zv="Cache for Windows (x86-32) 2010.2.2 (Build 600U)" ts="2011-09-29 22:09:44">
+<CSP name="GTD.csp" application="/csp/recital/" default="1"><![CDATA[
+<CSP:StudioInteractiveTemplate name="Get Things Done" mode="addin" description="List of outstanding work items">
+<html>
+<head>
+<title>TODO items</title>
+</head>
+<body>
+<!--
+Copyright (c) 2011 Alex Woodhead
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<table>
+ <script language="CACHE" RUNAT="SERVER">
+ /*
+ Views:
+   Default - List TODO's classname order
+   Who - List TODO's in Assignee order where Who is not empty, not complete
+   Next - List TODO's in classname order where Next=1, not complete
+   When - List TODO's in 
+   Tag Parse Errors - Need to collect parse errors and display
+ Consider making the "What" searchable full text search
+ */
+ 
+ set action=%request.Get("Action","Default")
+ //set action="Errors"
+ 
+ 
+  // ensure Cached dictionary is up to date
+  set rescanstart=$ZTS
+  kill tagErrors
+  do ##class(Cosmic.MetaTag.Parser).UpdateAll("cd",0,.tagErrors)
+  set rescanend=$ZTS
+  //W !,"<h3>Refreshed in ",($P(rescanend,",",2)-$P(rescanstart,",",2))," seconds</h3>"
+  /*
+  &SQL(DECLARE TODOS CURSOR FOR
+  		SELECT distinct(CosmicClass)
+  	INTO :class
+  	FROM Cosmic_GTD.TODO
+  	WHERE CosmicClassType='cd'
+  	ORDER by CosmicClass)
+  &SQL(Open TODOS)
+  for  {
+	  &SQL(FETCH TODOS)
+	  Quit:SQLCODE'=0
+	  do ##class(Cosmic.GTD.TODO).ToHTML(class)
+  }
+  &SQL(Close TODOS)  */
+  
+ </script>
+ 
+ <table>
+   <tr>
+     <td>
+       <button onClick='window.location="GTD.csp?Action=Default;"'>Default</botton>
+     </td>
+     <td>
+       <button onClick='window.location="GTD.csp?Action=Next"'>Next</botton>
+     </td>
+     <td>
+       <button onClick='window.location="GTD.csp?Action=Who"'>Who</botton>
+     </td>
+     <td>
+       <button onClick='window.location="GTD.csp?Action=When"'>When</botton>
+     </td>
+     <td>
+       <button onClick='window.location="GTD.csp?Action=Errors"'>Tag Format Errors</botton>
+     </td>
+   </tr>
+ </table>
+ 
+ <csp:if condition='action="Who"'>
+ 
+ <script language="CACHE" runat="SERVER">
+ &SQL(DECLARE whoQuery CURSOR FOR
+ SELECT Who,CosmicClass,
+CASE
+  WHEN CosmicClassOnly='1' THEN 'Class'
+  WHEN CosmicProperty is not null then {fn CONCAT('Property ',CosmicProperty)}
+  WHEN CosmicParameter is not null then {fn CONCAT('Parameter ',CosmicParameter)}
+  WHEN CosmicXData is not null then {fn CONCAT('Xdata ',CosmicXData)}
+  WHEN CosmicMethod is not null AND CosmicIsMethodSource='0' then {fn CONCAT('Method ',CosmicMethod)}
+  ELSE {fn CONCAT('Method Source ',CosmicMethod)}
+END as mode,
+What
+INTO :who,:class,:mode,:what
+FROM Cosmic_GTD.TODO
+WHERE CosmicClassType='cd' AND Who is not null
+ORDER BY Who,CosmicClass,mode)
+ 
+ &html<<p>Display assigned tags. Ordered by ClassName and Tag Item</p>
+ 
+ <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
+   <tr Style="background:white">
+     <th>Who</th><th>Class</th><th>Tag Location</th><th>What</th>
+   </tr>>
+&SQL(OPEN whoQuery)
+for {
+	&SQL(FETCH whoQuery)
+	quit:SQLCODE'=0
+	
+	&html<<tr Style="background:white">
+	  <td>#(..EscapeHTML(who))#</td>
+	  <td>#(..EscapeHTML(class))#</td>
+	  <td>#(..EscapeHTML(mode))#</td>
+	  <td style="width:300px">#(..EscapeHTML(what))#</td>
+	</tr>>
+}
+
+&SQL(CLOSE whoQuery)
+ &html<</table>>
+ 
+ </script>
+ 
+ <csp:elseif condition='action="Next"'>
+ <script language="CACHE" runat="SERVER">
+ &SQL(
+ DECLARE nextQuery CURSOR FOR
+ SELECT CosmicClass,
+CASE
+  WHEN CosmicClassOnly='1' THEN 'Class'
+  WHEN CosmicProperty is not null then {fn CONCAT('Property ',CosmicProperty)}
+  WHEN CosmicParameter is not null then {fn CONCAT('Parameter ',CosmicParameter)}
+  WHEN CosmicXData is not null then {fn CONCAT('Xdata ',CosmicXData)}
+  WHEN CosmicMethod is not null AND CosmicIsMethodSource='0' then {fn CONCAT('Method ',CosmicMethod)}
+  ELSE {fn CONCAT('Method Source ',CosmicMethod)}
+END as mode,
+What
+ INTO :class,:mode,:what
+FROM Cosmic_GTD.TODO
+WHERE CosmicClassType='cd' AND _Next='1'
+ORDER BY CosmicClass,mode)
+
+&html<<p>Display tags with Next flag set. Ordered by ClassName and Tag Item</p>
+ 
+ <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
+   <tr Style="background:white">
+     <th>Class</th><th>Tag Location</th><th>What</th>
+   </tr>>
+&SQL(OPEN nextQuery)
+for {
+	&SQL(FETCH nextQuery)
+	quit:SQLCODE'=0
+	
+	&html<<tr Style="background:white">
+	  <td>#(..EscapeHTML(class))#</td>
+	  <td>#(..EscapeHTML(mode))#</td>
+	  <td style="width:300px">#(..EscapeHTML(what))#</td>
+	</tr>>
+}
+
+&SQL(CLOSE nextQuery)
+ &html<</table>>
+
+
+ </script>
+
+ 
+ 
+ <csp:elseif condition='action="When"'>
+ <script language="SQL" name="whenQuery">
+SELECT _When,CosmicClass,
+CASE
+  WHEN CosmicClassOnly='1' THEN 'Class'
+  WHEN CosmicProperty is not null then {fn CONCAT('Property ',CosmicProperty)}
+  WHEN CosmicParameter is not null then {fn CONCAT('Parameter ',CosmicParameter)}
+  WHEN CosmicXData is not null then {fn CONCAT('Xdata ',CosmicXData)}
+  WHEN CosmicMethod is not null AND CosmicIsMethodSource='0' then {fn CONCAT('Method ',CosmicMethod)}
+  ELSE {fn CONCAT('Method Source ',CosmicMethod)}
+END as mode,
+What
+FROM Cosmic_GTD.TODO
+WHERE _WHEN IS NOT NULL
+Group by _WHEN,CosmicClass
+ORDER BY _WHEN,CosmicClass,mode
+</script>
+ <p>Display tags ordered by delivery date latest first</p>
+ 
+ <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
+   <tr Style="background:white">
+     <th>When</th><th>Class</th><th>Tag Location</th><th>What</th>
+   </tr>
+   <csp:while condition="whenQuery.Next()">
+	<tr Style="background:white">
+	  <td>#(..EscapeHTML(whenQuery.GetData(1)))#</td>
+	  <td>#(..EscapeHTML(whenQuery.GetData(2)))#</td>
+	  <td>#(..EscapeHTML(whenQuery.GetData(3)))#</td>
+	  <td style="width:300px">#(..EscapeHTML(whenQuery.GetData(4)))#</td>
+	</tr>
+   </csp:while>
+   
+ </table>
+ 
+ <csp:elseif condition='action="Errors"'>
+ 
+ <script language="CACHE" runat="SERVER">
+	if $Data(tagErrors)=0 {
+		&html<<p>There are no Tag Parse Errors to display.</p>>
+	} else {
+		&html<<p>Displaying Tag Parse Errors. Ordered by ClassName and Tag Item</p>
+ 
+ <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
+   <tr Style="background:white">
+     <th>Class</th><th>Tag Location</th><th>Tag Definition</th><th>Error</th>
+   </tr>>
+   		
+   	set class=""
+   	for {
+   		set class=$Order(tagErrors(class))
+   		quit:class=""
+   		
+   		set mode=""
+   		for {
+	   		set mode=$O(tagErrors(class,mode))
+	   		quit:mode=""
+	   		
+	   		if mode="%",$Data(tagErrors(class,mode))'=10
+	   		{
+		   		// Write out class level parse problem
+		   		// line 0 / empty
+		   		&html<<tr Style="background:white">
+     				<td>#(..EscapeHTML(class))#</td>
+     				<td>#($Select(mode="%":"Class",1:..EscapeHTML(mode)))#</td>
+     				<td></td><td>>
+     			do ..DisplayStatus(tagErrors(class,mode))
+   				&html<</td></tr>>
+	   		}
+	   		
+	   		set line=""
+	   		for {
+	   			set line=$O(tagErrors(class,mode,line))
+	   			quit:line=""
+	   			
+	   			&html<<tr Style="background:white">
+     				<td>#(..EscapeHTML(class))#</td>
+     				<td>#($Select(mode="%":"Class",1:..EscapeHTML(mode)))#</td>
+     				<td>#(..EscapeHTML(tagErrors(class,mode,line,"l")))#</td><td>>
+     			do ..DisplayStatus(tagErrors(class,mode,line,"e"))
+   				&html<</td></tr>>
+	   		}
+   		}
+   		
+   	}
+   		
+   &html<</table>>
+	}
+</script>
+ 
+ 
+ <csp:else>
+  
+ <script language="CACHE" runat="SERVER">
+ &SQL(
+ DECLARE defaultQuery CURSOR FOR
+ SELECT CosmicClass,
+CASE
+  WHEN CosmicClassOnly='1' THEN 'Class'
+  WHEN CosmicProperty is not null then {fn CONCAT('Property ',CosmicProperty)}
+  WHEN CosmicParameter is not null then {fn CONCAT('Parameter ',CosmicParameter)}
+  WHEN CosmicXData is not null then {fn CONCAT('Xdata ',CosmicXData)}
+  WHEN CosmicMethod is not null AND CosmicIsMethodSource='0' then {fn CONCAT('Method ',CosmicMethod)}
+  ELSE {fn CONCAT('Method Source ',CosmicMethod)}
+END as mode,
+What,
+CASE _Next
+	WHEN 1 THEN 'Yes'
+	ELSE ''
+END as _Next,_When,Who
+ INTO :class,:mode,:what,:next,:when,:who
+FROM Cosmic_GTD.TODO
+WHERE CosmicClassType='cd'
+ORDER BY CosmicClass,mode)
+
+&html<<p>Default view of all tags. Ordered by ClassName and Tag Item</p>
+ 
+ <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
+   <tr Style="background:white">
+     <th>Class</th><th>Tag</th><th>What</th><th>Next</th><th>When</th><th>Who</th>
+   </tr>>
+&SQL(OPEN defaultQuery)
+for {
+	&SQL(FETCH defaultQuery)
+	quit:SQLCODE'=0
+	
+	&html<<tr Style="background:white">
+	  <td>#(..EscapeHTML(class))#</td>
+	  <td>#(..EscapeHTML(mode))#</td>
+	  <td style="width:300px">#(..EscapeHTML(what))#</td>
+	  <td>#(..EscapeHTML(next))#</td>
+	  <td>#(..EscapeHTML(when))#</td>
+	  <td>#(..EscapeHTML(who))#</td>
+	</tr>>
+}
+&SQL(CLOSE defaultQuery)
+ &html<</table>>
+ </script>
+ </csp:if>
+</body>
+</html>
+<script language="CACHE" RUNAT="SERVER" Method="DisplayStatus" arguments="status:%Status">
+	/// Method to reformat Exception and output to html response
+    Kill errorlist
+	Quit:'$Data(status) ""
+	Do $SYSTEM.Status.DecomposeStatus(status,.errorlist)
+	set item=""
+	for {
+		set item=$Order(errorlist(item))
+		quit:item=""
+		Write $ZCVT(errorlist(item),"O","HTML")
+		if item>1,item<errorlist Write "<br/>"
+	}
+</script>]]></CSP>
+</Export>

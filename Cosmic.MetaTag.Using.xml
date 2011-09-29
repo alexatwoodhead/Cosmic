@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="24">
+<Class name="Cosmic.MetaTag.Using">
+<Description><![CDATA[
+<pre>
+Copyright (c) 2011 Alex Woodhead
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre>
+Standard tag for "including" or "importing" a Cache class package containing custom MetaTag implementations
+These "Using" directions give the Tag Parser a context to correlate Tag names
+with their corresponding Tag class implementation]]></Description>
+<SqlTableName>_Using</SqlTableName>
+<Super>Cosmic.MetaTag.Tag</Super>
+<TimeCreated>62283,62220.640168</TimeCreated>
+
+<Parameter name="DecorateClasses">
+<Description>
+The Using tag may only be implemented in class description text</Description>
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="IsMultiUse">
+<Description>
+The Using tag may be used multiple times in a class description text</Description>
+<Type>%Boolean</Type>
+<Default>1</Default>
+</Parameter>
+
+<Property name="Alias">
+<Type>%String</Type>
+<Parameter name="COLLATION" value="EXACT"/>
+</Property>
+
+<Method name="InitSS">
+<Description><![CDATA[
+Terse mode define a <em>Using</em> tag with a package and a specific alias.<br/>
+<EXAMPLE>
+/// [TagName("MyPackage.SubPackage","MyAlias")]
+</EXAMPLE>]]></Description>
+<FormalSpec>arg1:%String,arg2:%String</FormalSpec>
+<Implementation><![CDATA[
+	Set ..Name=arg1
+	Set ..Alias=arg2
+]]></Implementation>
+</Method>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+/// Terse mode define a <em>Using</em> tag with a package and no alias.<br/>
+/// Override to implement specific behaviour
+/// <EXAMPLE>
+/// /// [TagName("MyValue1")]
+/// </EXAMPLE>
+Method InitS(arg1 As %String)
+{
+	Set ..Package=arg1
+} */
+]]></Content>
+</UDLText>
+
+<Query name="MetaTagClassesWithUsing">
+<Description>
+Class type</Description>
+<Type>%SQLQuery</Type>
+<FormalSpec>classType:Cosmic.MetaTag.ClassType,package:%String</FormalSpec>
+<SqlQuery>	-- Using %Exact to help SQL optimiser choose
+	-- the expected 'ClassesUsing' index
+	Select distinct(%EXACT(CosmicClass))
+	FROM Cosmic_MetaTag._Using
+	WHERE CosmicClassType=:classType
+		AND Name=:package</SqlQuery>
+</Query>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>UsingDefaultData</DefaultData>
+<Data name="UsingDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"Using"</Subscript>
+<Value name="1">
+<Value>Package</Value>
+</Value>
+<Value name="2">
+<Value>Alias</Value>
+</Value>
+<Value name="3">
+<Value>ClassName</Value>
+</Value>
+<Value name="4">
+<Value>ClassType</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+</Export>

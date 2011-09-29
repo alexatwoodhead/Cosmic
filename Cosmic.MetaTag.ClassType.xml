@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="24">
+<Class name="Cosmic.MetaTag.ClassType">
+<Description><![CDATA[
+<pre>
+Copyright (c) 2011 Alex Woodhead
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+</pre>]]></Description>
+<Super>%Library.String</Super>
+<TimeCreated>62310,71027.34399</TimeCreated>
+
+<Parameter name="DISPLAYLIST">
+<Description><![CDATA[
+Used for enumerated (multiple-choice) attributes.
+Used in conjunction with the <a href="#VALUELIST">VALUELIST</a> parameter for enumerated
+(multiple-choice) attributes. <var>DISPLAYLIST</var>, if not null,
+represents the display values for the attribute corresponding with
+the logical values listed in <var>VALUELIST</var>.
+<p>The display values are returned by the <a href="#LogicalToDisplay">LogicalToDisplay</a> method.]]></Description>
+<Default>,ClassDefinition,CompiledClass</Default>
+</Parameter>
+
+<Parameter name="COLLATION">
+<Description>
+The default collation value used for this data type.</Description>
+<Default>EXACT</Default>
+</Parameter>
+
+<Parameter name="VALUELIST">
+<Description><![CDATA[
+Used for enumerated (multiple-choice) attributes.
+<var>VALUELIST</var> is either a null string ("") or a delimiter
+separated list (where the delimiter is the first character) of logical values.
+If a non-null value is present, then the attribute is restricted to values
+in the list, and the validation code simply checks to see if the value is in the list.]]></Description>
+<Default>,cd,cc</Default>
+</Parameter>
+</Class>
+</Export>
