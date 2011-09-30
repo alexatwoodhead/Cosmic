@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="24" zv="Cache for Windows (x86-32) 2010.2.2 (Build 600U)" ts="2011-09-29 22:09:44">
+<Export generator="Cache" version="24" zv="Cache for Windows (x86-32) 2010.2.2 (Build 600U)" ts="2011-09-30 16:33:43">
 <CSP name="GTD.csp" application="/csp/recital/" default="1"><![CDATA[
 <CSP:StudioInteractiveTemplate name="Get Things Done" mode="addin" description="List of outstanding work items">
 <html>
@@ -100,7 +100,9 @@ END as mode,
 What
 INTO :who,:class,:mode,:what
 FROM Cosmic_GTD.TODO
-WHERE CosmicClassType='cd' AND Who is not null
+WHERE CosmicClassType='cd'
+  AND Who is not null
+  AND Completed=0
 ORDER BY Who,CosmicClass,mode)
  
  &html<<p>Display assigned tags. Ordered by ClassName and Tag Item</p>
@@ -143,7 +145,9 @@ END as mode,
 What
  INTO :class,:mode,:what
 FROM Cosmic_GTD.TODO
-WHERE CosmicClassType='cd' AND _Next='1'
+WHERE CosmicClassType='cd'
+  AND _Next='1'
+  AND Completed=0
 ORDER BY CosmicClass,mode)
 
 &html<<p>Display tags with Next flag set. Ordered by ClassName and Tag Item</p>
@@ -173,8 +177,10 @@ for {
  
  
  <csp:elseif condition='action="When"'>
- <script language="SQL" name="whenQuery">
-SELECT _When,CosmicClass,
+ <script language="CACHE" runat="SERVER">
+ &SQL(
+ DECLARE whenQuery CURSOR FOR
+ SELECT _When,CosmicClass,
 CASE
   WHEN CosmicClassOnly='1' THEN 'Class'
   WHEN CosmicProperty is not null then {fn CONCAT('Property ',CosmicProperty)}
@@ -183,28 +189,37 @@ CASE
   WHEN CosmicMethod is not null AND CosmicIsMethodSource='0' then {fn CONCAT('Method ',CosmicMethod)}
   ELSE {fn CONCAT('Method Source ',CosmicMethod)}
 END as mode,
-What
+  What 
+INTO :when,:class,:mode,:what
 FROM Cosmic_GTD.TODO
-WHERE _WHEN IS NOT NULL
-Group by _WHEN,CosmicClass
+WHERE CosmicClassType='cd'
+  AND  _WHEN IS NOT NULL
+  AND Completed=0
+--Group by _WHEN,CosmicClass
 ORDER BY _WHEN,CosmicClass,mode
-</script>
- <p>Display tags ordered by delivery date latest first</p>
+ )
+ &html<<p>Display tags ordered by delivery date latest first</p>
  
  <table cellpadding=5 cell-spacing=1 border=0 Style="background-color:navy">
    <tr Style="background:white">
      <th>When</th><th>Class</th><th>Tag Location</th><th>What</th>
-   </tr>
-   <csp:while condition="whenQuery.Next()">
-	<tr Style="background:white">
-	  <td>#(..EscapeHTML(whenQuery.GetData(1)))#</td>
-	  <td>#(..EscapeHTML(whenQuery.GetData(2)))#</td>
-	  <td>#(..EscapeHTML(whenQuery.GetData(3)))#</td>
-	  <td style="width:300px">#(..EscapeHTML(whenQuery.GetData(4)))#</td>
-	</tr>
-   </csp:while>
-   
- </table>
+   </tr>>
+ &SQL(OPEN whenQuery)
+ for {
+	&SQL(FETCH whenQuery)
+	quit:SQLCODE'=0
+	&html<<tr Style="background:white">
+	  <td>#(..EscapeHTML(when))#</td>
+	  <td>#(..EscapeHTML(class))#</td>
+	  <td>#(..EscapeHTML(mode))#</td>
+	  <td style="width:300px">#(..EscapeHTML(what))#</td>
+	</tr>>
+ }
+ &SQL(CLOSE whenQuery)
+ &html<</table>>
+ </script>
+ 
+ 
  
  <csp:elseif condition='action="Errors"'>
  
@@ -284,6 +299,7 @@ END as _Next,_When,Who
  INTO :class,:mode,:what,:next,:when,:who
 FROM Cosmic_GTD.TODO
 WHERE CosmicClassType='cd'
+  AND Completed=0
 ORDER BY CosmicClass,mode)
 
 &html<<p>Default view of all tags. Ordered by ClassName and Tag Item</p>
